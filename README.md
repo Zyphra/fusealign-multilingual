@@ -85,23 +85,31 @@ junction-corrected labels. The network follows the paper: a 12-layer, 1024-wide 
 patches and the frozen text encoder of [Dia](https://huggingface.co/nari-labs/Dia-1.6B-0626), with convolutional
 refinement to a 1 ms grid and a presence head.
 
-% of word boundaries off by more than 50 ms (the paper's asymmetric error):
+% of word boundaries off by more than 50 ms (the paper's asymmetric error), against
+[Qwen3-ForcedAligner-0.6B](https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B) on the same clips, transcripts and
+references:
 
-| Corpus | % >50 |
-| --- | ---: |
-| TIMIT | 16.55 |
-| Buckeye | 24.58 |
-| AMI-silver | 49.38 |
-| TIMIT-long | 17.25 |
-| BZNSYP Mandarin (gold) | 15.94 |
-| FLEURS Mandarin | 17.95 |
-| FLEURS Japanese | 14.02 |
-| FLEURS Korean | 8.39 |
-| FLEURS Spanish | 19.66 |
-| FLEURS Portuguese | 9.30 |
-| FLEURS French | 13.15 |
-| FLEURS German | 13.29 |
-| FLEURS Russian | 12.74 |
+| Corpus | FuseAlign | Qwen3-FA |
+| --- | ---: | ---: |
+| TIMIT | 16.55 | 20.17 |
+| Buckeye | 24.58 | 24.60 |
+| AMI-silver | 49.38 | 58.22 |
+| TIMIT-long | 17.25 | 20.04 |
+| BZNSYP Mandarin (gold) | 15.94 | 28.04 |
+| FLEURS Mandarin | 17.95 | 11.06 |
+| FLEURS Japanese | 14.02 | 8.38 |
+| FLEURS Korean | 8.39 | 11.53 |
+| FLEURS Spanish | 19.66 | 11.71 |
+| FLEURS Portuguese | 9.30 | 10.24 |
+| FLEURS French | 13.15 | 12.35 |
+| FLEURS German | 13.29 | 13.91 |
+| FLEURS Russian | 12.74 | 11.18 |
+
+- Qwen3-FA ran through qwen-asr 0.0.6's `Qwen3ForcedAligner.align` in bf16, one whole clip per call (the longest
+  is 81 s, under its 180 s limit), on the words joined by spaces. A word spans the units qwen-asr cut from it (CJK
+  characters, Japanese and Korean sub-words). Its boundaries fall on an 80 ms grid.
+- FLEURS references are Montreal Forced Aligner output, not hand labels; BZNSYP's are hand-labelled.
+- Boundaries off by more than 300 ms: Buckeye 1.10% (FuseAlign) vs 2.67% (Qwen3-FA), AMI-silver 16.31% vs 24.13%.
 
 ## Performance
 
