@@ -96,6 +96,7 @@ references:
 | AMI-silver | 49.38 | 58.22 |
 | TIMIT-long | 17.25 | 20.04 |
 | BZNSYP Mandarin (gold) | 15.94 | 28.04 |
+| Seoul Corpus Korean (gold) | 21.18 | 33.58 |
 | FLEURS Mandarin | 17.95 | 11.06 |
 | FLEURS Japanese | 14.02 | 8.38 |
 | FLEURS Korean | 8.39 | 11.53 |
@@ -109,6 +110,11 @@ references:
   is 81 s, under its 180 s limit), on the words joined by spaces. A word spans the units qwen-asr cut from it (CJK
   characters, Japanese and Korean sub-words). Its boundaries fall on an 80 ms grid.
 - FLEURS references are Montreal Forced Aligner output, not hand labels; BZNSYP's are hand-labelled.
+- Seoul Corpus: spontaneous interviews of 40 speakers with hand-corrected word boundaries. Clips are the
+  interviewee's turns, split at interviewer speech, unintelligible or redacted spans and laughed words, and packed
+  into clips of at most 30 s, cut at pause midpoints (8,786 clips, 226,136 words, 31.9 h). The labeller behind the fine-tune's
+  Korean labels has one 7.1 ms offset fitted on speakers s01–s20; on s21–s40 alone the rates are 20.63 (FuseAlign) and
+  31.84 (Qwen3-FA).
 - Boundaries off by more than 300 ms: Buckeye 1.10% (FuseAlign) vs 2.67% (Qwen3-FA), AMI-silver 16.31% vs 24.13%.
 
 ## Performance
