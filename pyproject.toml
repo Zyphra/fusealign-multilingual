@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fusealign-hub"
 version = "0.1.0"
-description = "FuseAlign word-level forced aligner (multilingual CJK fine-tune, step 2500) for torch.hub"
+description = "FuseAlign word-level forced aligner (multilingual noisy student, step 60000) for torch.hub"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

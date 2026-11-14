@@ -28,7 +28,7 @@ MAX_SECONDS = 30.0
 PRESENCE_THRESHOLD = 0.1
 WHISPER_MODEL = "openai/whisper-large-v3"
 HF_REPO = "Zyphra/fusealign"
-CHECKPOINT_FILE = "fusealign-multilingual-cjkft-step2500.safetensors"
+CHECKPOINT_FILE = "fusealign-multilingual-ns4-step60000.safetensors"
 CHECKPOINT_FORMAT = "fusealign-hub/1"
 
 # Padded audio per forward. Measured peak CUDA memory per process (H100, bf16, ~1 GB of it resident weights):
@@ -73,7 +73,8 @@ class FuseAlignAligner:
 
     ``batch_size`` clips (or long-form chunks) share one forward, length-sorted. Batches are not
     bit-identical to ``batch_size=1``, because bf16 GEMM rounding depends on the batch shape
-    (Buckeye MAE 33.36 → 33.38 ms); set ``aligner.batch_size = 1`` for the exact per-clip outputs.
+    (Buckeye mean asymmetric error 27.32 → 27.36 ms); set ``aligner.batch_size = 1`` for the exact
+    per-clip outputs.
     """
 
     def __init__(self, model: FuseAlign, encoder: DiaTextEncoder, *, batch_size: int = 64,
@@ -437,9 +438,9 @@ def load_aligner(checkpoint: str | os.PathLike | None = None,
         cast_autocast_weights(net)
     if compile_model:
         # Inductor fuses the RoPE/RMSNorm/mask elementwise chains and cuts launch overhead:
-        # -20% forward on fresh corpus-like shapes at 960 s / 64 batches, MAE 39.41 -> 39.39 ms
-        # on 400 Buckeye clips. Costs ~70 s of compilation on a cold cache (~11 s warm) and
-        # ~30 s per new specialization; worth it only in long-running processes.
+        # -20% forward on fresh corpus-like shapes at 960 s / 64 batches, mean asymmetric error
+        # 24.36 -> 24.35 ms on 400 Buckeye clips. Costs ~70 s of compilation on a cold cache
+        # (~11 s warm) and ~30 s per new specialization; worth it only in long-running processes.
         # dynamic=True because every batch has new lengths. Inductor's coalesce tiling analysis
         # (default on in torch 2.11) fails an assertion in tiling_utils.get_pw_red_splits on
         # this graph's dynamic shapes; its own config notes it does not apply to them.

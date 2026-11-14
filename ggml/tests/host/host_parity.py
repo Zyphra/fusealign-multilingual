@@ -14,7 +14,7 @@ probabilities within 1e-5, speech regions identical, resampling within 1e-6, WAV
 ``{"clip_id", "words": [{"word", "start", "end"}]}``) for VAD probabilities, speech regions and long-form
 planning. Without it, those cases are skipped.
 
-``--gguf`` defaults to dist/fusealign-multilingual-cjkft-step2500-f32.gguf; when that file is missing a GGUF holding
+``--gguf`` defaults to dist/fusealign-multilingual-ns4-step60000-f32.gguf; when that file is missing a GGUF holding
 only the 15 ``vad.*`` tensors is written from ``silero_vad`` into the temporary directory (needs ``gguf``).
 """
 
@@ -36,7 +36,7 @@ from fusealign_hub import longform, vad
 from fusealign_hub.aligner import _is_wordy
 
 REPO = Path(__file__).resolve().parents[3]
-DEFAULT_GGUF = REPO / "dist" / "fusealign-multilingual-cjkft-step2500-f32.gguf"
+DEFAULT_GGUF = REPO / "dist" / "fusealign-multilingual-ns4-step60000-f32.gguf"
 DEFAULT_BIN = REPO / "ggml" / "build" / "tests" / "host" / "test-host-parity"
 
 

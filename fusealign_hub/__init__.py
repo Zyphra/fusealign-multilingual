@@ -1,4 +1,4 @@
-"""FuseAlign word-level forced aligner (multilingual CJK fine-tune, step 2500)."""
+"""FuseAlign word-level forced aligner (multilingual noisy student, step 60000)."""
 
 from . import aligner, longform, model, text_encoder, vad
 from .aligner import SAMPLE_RATE, FuseAlignAligner, WordAlignment, load_aligner

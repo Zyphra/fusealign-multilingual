@@ -3,8 +3,8 @@
 Word-level forced alignment with FuseAlign, as a PyTorch package (`torch.hub` or pip) and a native C++ port on
 ggml. FuseAlign ([Vaidya et al., 2026](https://arxiv.org/abs/2609.33650)) is not a CTC model. A joint audio/text
 transformer reads the waveform and the UTF-8 bytes of the transcript and predicts, per word, a start and an end on
-a 1 ms grid plus a presence probability. The weights are Zyphra's multilingual FuseAlign, fine-tuned on corrected
-CJK labels (step 2,500); see [Model](#model).
+a 1 ms grid plus a presence probability. The weights are Zyphra's multilingual FuseAlign noisy student (step
+60,000); see [Model](#model).
 
 ## Usage
 
@@ -15,7 +15,7 @@ import torch
 aligner = torch.hub.load("Zyphra/fusealign-multilingual", "fusealign", trust_repo=True, device="cuda")
 wav, sr = sf.read("SA1.wav", dtype="float32")  # TIMIT's SA1 sentence
 words = aligner.align(torch.from_numpy(wav), sr, "she had your dark suit in greasy wash water all year")
-# [WordAlignment(word='she', start=0.183, end=0.353, presence=0.99..., placed=True), ...]
+# [WordAlignment(word='she', start=0.162, end=0.37, presence=0.99..., placed=True), ...]
 ```
 
 Or install the package:
@@ -80,10 +80,13 @@ are zero-width at the previous token's end. There is no snapping and no order re
 
 ## Model
 
-A reproduction of FuseAlign by Zyphra: the multilingual model (100,000 steps), fine-tuned 2,500 steps on CJK
-junction-corrected labels. The network follows the paper: a 12-layer, 1024-wide joint transformer over 32 ms audio
-patches and the frozen text encoder of [Dia](https://huggingface.co/nari-labs/Dia-1.6B-0626), with convolutional
-refinement to a 1 ms grid and a presence head.
+A reproduction of FuseAlign by Zyphra: one multilingual noisy student (Xie et al., 2020), trained 60,000 steps from the
+multilingual model's CJK fine-tune on about 25,000 h of audio in 73 languages. A teacher per language labels most of
+it on clean audio: an English noisy student for English, the CJK fine-tune for the rest, with pause edges outside CJK
+from MMS forced alignment wherever that finds a pause of 100 ms or more. Gentle-labelled English and corrected CJK
+labels make up the other 2,400 h. The student learns the labels from augmented audio. The network
+follows the paper: a 12-layer, 1024-wide joint transformer over 32 ms audio patches and the frozen text encoder of
+[Dia](https://huggingface.co/nari-labs/Dia-1.6B-0626), with convolutional refinement to a 1 ms grid and a presence head.
 
 % of word boundaries off by more than 50 ms (the paper's asymmetric error), against
 [Qwen3-ForcedAligner-0.6B](https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B) on the same clips, transcripts and
@@ -91,31 +94,33 @@ references:
 
 | Corpus | FuseAlign | Qwen3-FA |
 | --- | ---: | ---: |
-| TIMIT | 16.55 | 20.17 |
-| Buckeye | 24.58 | 24.60 |
-| AMI-silver | 49.38 | 58.22 |
-| TIMIT-long | 17.25 | 20.04 |
-| BZNSYP Mandarin (gold) | 15.94 | 28.04 |
-| Seoul Corpus Korean (gold) | 21.18 | 33.58 |
-| FLEURS Mandarin | 17.95 | 11.06 |
-| FLEURS Japanese | 14.02 | 8.38 |
-| FLEURS Korean | 8.39 | 11.53 |
-| FLEURS Spanish | 19.66 | 11.71 |
-| FLEURS Portuguese | 9.30 | 10.24 |
-| FLEURS French | 13.15 | 12.35 |
-| FLEURS German | 13.29 | 13.91 |
-| FLEURS Russian | 12.74 | 11.18 |
+| TIMIT | 7.92 | 20.17 |
+| Buckeye | 7.23 | 24.60 |
+| AMI-silver | 34.22 | 58.22 |
+| TIMIT-long | 8.21 | 20.04 |
+| BZNSYP Mandarin (gold) | 15.44 | 28.04 |
+| Seoul Corpus Korean (gold) | 22.43 | 33.58 |
+| FLEURS Mandarin | 17.97 | 11.06 |
+| FLEURS Japanese | 13.34 | 8.38 |
+| FLEURS Korean | 7.80 | 11.53 |
+| FLEURS Spanish | 15.43 | 11.71 |
+| FLEURS Portuguese | 9.20 | 10.24 |
+| FLEURS French | 13.34 | 12.35 |
+| FLEURS German | 13.99 | 13.91 |
+| FLEURS Russian | 10.60 | 11.18 |
 
+- FuseAlign ran through this package on CUDA with `batch_size=1`; AMI-silver and TIMIT-long, the long-form sets,
+  with cached Whisper large-v3 words as `asr_words`.
 - Qwen3-FA ran through qwen-asr 0.0.6's `Qwen3ForcedAligner.align` in bf16, one whole clip per call (the longest
   is 81 s, under its 180 s limit), on the words joined by spaces. A word spans the units qwen-asr cut from it (CJK
   characters, Japanese and Korean sub-words). Its boundaries fall on an 80 ms grid.
 - FLEURS references are Montreal Forced Aligner output, not hand labels; BZNSYP's are hand-labelled.
 - Seoul Corpus: spontaneous interviews of 40 speakers with hand-corrected word boundaries. Clips are the
   interviewee's turns, split at interviewer speech, unintelligible or redacted spans and laughed words, and packed
-  into clips of at most 30 s, cut at pause midpoints (8,786 clips, 226,136 words, 31.9 h). The labeller behind the fine-tune's
-  Korean labels has one 7.1 ms offset fitted on speakers s01–s20; on s21–s40 alone the rates are 20.63 (FuseAlign) and
-  31.84 (Qwen3-FA).
-- Boundaries off by more than 300 ms: Buckeye 1.10% (FuseAlign) vs 2.67% (Qwen3-FA), AMI-silver 16.31% vs 24.13%.
+  into clips of at most 30 s, cut at pause midpoints (8,786 clips, 226,136 words, 31.9 h). The labeller behind the
+  Korean training labels has one 7.1 ms offset fitted on speakers s01–s20; on s21–s40 alone the rates are 22.13
+  (FuseAlign) and 31.84 (Qwen3-FA).
+- Boundaries off by more than 300 ms: Buckeye 0.40% (FuseAlign) vs 2.67% (Qwen3-FA), AMI-silver 13.44% vs 24.13%.
 
 ## Performance
 
@@ -123,8 +128,8 @@ references:
   `batch_size` items (default 64) and 960 s of padded audio. Every mask is per sample, including
   the refinement heads' convolutions, so a clip's outputs do not depend on its batch companions
   beyond bf16 rounding. Batches are not bit-identical to `batch_size=1`, because bf16 GEMM
-  rounding depends on the batch shape (Buckeye MAE 33.36 → 33.38 ms). `aligner.batch_size = 1`
-  reproduces the per-clip outputs exactly.
+  rounding depends on the batch shape (Buckeye mean asymmetric error 27.32 → 27.36 ms).
+  `aligner.batch_size = 1` reproduces the per-clip outputs exactly.
 - On CUDA the weights autocast would cast to bf16 on every forward are stored in bf16
   (bit-identical, ~200 fewer cast kernels per forward).
 - Silero VAD runs vectorized: the STFT and encoder over every frame of a 131 s block at once, the
@@ -132,10 +137,10 @@ references:
   to ~2e-6, not bit for bit.
 - All chunks of a long recording go through one batched forward.
 - `compile_model=True` wraps the network in `torch.compile(dynamic=True)`: -20% forward time on
-  corpus-like shapes (MAE 39.41 → 39.39 ms on 400 Buckeye clips), at ~70 s of compilation on a cold
-  cache (~11 s warm) and ~30 s per new specialization. Worth it only in long-running processes;
-  compiled outputs are not bit-identical to eager (256 TIMIT clips: every edge within 20 ms of
-  eager). Inductor's coalesce tiling analysis is turned off for this compile: on torch 2.11 it
+  corpus-like shapes (mean asymmetric error 24.36 → 24.35 ms on 400 Buckeye clips), at ~70 s of compilation on a
+  cold cache (~11 s warm) and ~30 s per new specialization. Worth it only in long-running processes;
+  compiled outputs are not bit-identical to eager (256 TIMIT clips: 4,469 of 4,470 edges within 20 ms of
+  eager, the other 62 ms off). Inductor's coalesce tiling analysis is turned off for this compile: on torch 2.11 it
   fails an assertion on the model's dynamic shapes.
 
 ## Use as a git submodule
@@ -161,8 +166,8 @@ training export (a `torch.save` dict with `step`, `model` and `model_args`; the 
 this repo) and Dia's first shard, and optionally uploads it:
 
 ```
-uv run python scripts/build_checkpoint.py --export path/to/step_2500.pt \
-  --out dist/fusealign-multilingual-cjkft-step2500.safetensors [--push Zyphra/fusealign]
+uv run python scripts/build_checkpoint.py --export path/to/step_60000.pt \
+  --out dist/fusealign-multilingual-ns4-step60000.safetensors [--push Zyphra/fusealign]
 ```
 
 ## Native ggml version
@@ -171,7 +176,7 @@ uv run python scripts/build_checkpoint.py --export path/to/step_2500.pt \
 `ggml/ggml` pinned to v0.27.0 (`a05c9922`). It runs the FuseAlign network, the Dia text encoder,
 Silero VAD and the long-form routing natively, on CPU or CUDA, without Python. It has no Whisper:
 long-form recordings are routed by anchors the caller supplies, or else by the VAD character-time map
-(the Python `asr_words=[]` path), which is much less accurate (below). Each clip or long-form chunk is
+(the Python `asr_words=[]` path), which is less accurate (below). Each clip or long-form chunk is
 its own forward, as in Python with `batch_size=1`.
 
 ### Build and models
@@ -180,15 +185,15 @@ its own forward, as in Python with `batch_size=1`.
 git submodule update --init ggml/ggml
 cmake -B ggml/build -S ggml && cmake --build ggml/build -j                           # CPU
 cmake -B ggml/build-cuda -S ggml -DGGML_CUDA=ON && cmake --build ggml/build-cuda -j  # CUDA
-hf download Zyphra/fusealign fusealign-multilingual-cjkft-step2500-f32.gguf --local-dir models
+hf download Zyphra/fusealign fusealign-multilingual-ns4-step60000-f32.gguf --local-dir models
 ```
 
 CUDA builds target sm_90 (H100) unless `-DCMAKE_CUDA_ARCHITECTURES=...` says otherwise (for example `86` or `89`).
 
 | GGUF | Size | Weights |
 | --- | ---: | --- |
-| `fusealign-multilingual-cjkft-step2500-f32.gguf` | 1.35 GB | FuseAlign F32, Dia BF16, VAD F32 (the safetensors numbers) |
-| `fusealign-multilingual-cjkft-step2500-q8_0.gguf` | 0.51 GB | Transformer matmuls Q8_0 (FuseAlign blocks, `text_proj`, Dia attention and MLP); other Dia tensors BF16; the rest F32 |
+| `fusealign-multilingual-ns4-step60000-f32.gguf` | 1.35 GB | FuseAlign F32, Dia BF16, VAD F32 (the safetensors numbers) |
+| `fusealign-multilingual-ns4-step60000-q8_0.gguf` | 0.51 GB | Transformer matmuls Q8_0 (FuseAlign blocks, `text_proj`, Dia attention and MLP); other Dia tensors BF16; the rest F32 |
 
 Both are in [`Zyphra/fusealign`](https://huggingface.co/Zyphra/fusealign). `scripts/convert_gguf.py
 --outtype {f32,q8_0} [-o OUT]` writes them from the safetensors checkpoint (default
@@ -198,7 +203,7 @@ group). On CUDA the weights Python's autocast casts to bf16 run as BF16, everyth
 ### CLI
 
 ```
-ggml/build-cuda/fusealign-cli -m models/fusealign-multilingual-cjkft-step2500-f32.gguf \
+ggml/build-cuda/fusealign-cli -m models/fusealign-multilingual-ns4-step60000-f32.gguf \
   -a SA1.wav --text "she had your dark suit in greasy wash water all year"
 # [{"word": "she", "start": 0.183, "end": 0.353, "presence": 0.99..., "placed": true}, ...]
 ggml/build-cuda/fusealign-cli -m MODEL.gguf -a clip.wav --tokens '["我们", "今天", "去", "公园"]'
@@ -230,19 +235,20 @@ per forward). Batches were the full eval sets; TIMIT-long used cached Whisper an
 
 | | TIMIT % >50 | BZNSYP % >50 | TIMIT-long % >50 | Edges within 20 ms (TIMIT / BZNSYP) | TIMIT clips/s |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Python | 16.55 ± 0.31 | 15.94 ± 0.26 | 17.25 ± 0.61 | — | 81 (b1), 950 (b64) |
-| ggml f32, CUDA | 16.53 | 15.95 | 17.32 | 99.950% / 99.927% | 129 |
-| ggml q8_0, CUDA | 16.60 | 15.97 | 17.35 | 99.903% / 99.777% | 135 |
+| Python | 7.92 ± 0.23 | 15.44 ± 0.26 | 8.21 ± 0.45 | — | 81 (b1), 950 (b64) |
+| ggml f32, CUDA | 7.94 | 15.44 | 8.15 | 99.985% / 99.950% | 129 |
+| ggml q8_0, CUDA | 7.94 | 15.48 | 8.12 | 99.960% / 99.590% | 135 |
 
-- **Not bit-identical on CUDA.** About half the intervals are identical; the rest move by a few ms,
-  because torch's bf16 rounding can't be reproduced. Python itself differs from its CUDA run by as
+- **Not bit-identical on CUDA.** About two thirds of the intervals are identical (f32; q8_0 59–68%); the rest move
+  by a few ms, because torch's bf16 rounding can't be reproduced. Python itself differs from its CUDA run by as
   much on CPU.
 - **CPU** (f32, 16 threads): 0.55 s per TIMIT clip. On the first 500 TIMIT clips 99.977% of edges
-  are within 20 ms of the Python predictions; on the first 200, 99.97% are within 5 ms of Python's
+  are within 20 ms of the Python predictions; on the first 200, all are within 5 ms of Python's
   CPU path.
 - **q8_0** is a third of the size with the same scores, but no faster on an H100.
-- **Long-form without anchors (VAD character map):** TIMIT-long % >50 is 30.04 (Python's same path
-  30.07), against 17.32 with Whisper anchors. Supply anchors whenever you have them.
+- **Long-form without anchors (VAD character map):** TIMIT-long % >50 is 8.72 (Python's same path 8.73), against
+  8.15 with Whisper anchors, but 0.56% of words are off by more than 300 ms (0.01% with anchors) and the mean
+  asymmetric error is 56.6 ms (18.4 ms with anchors). Supply anchors whenever you have them.
 
 ### ggml tests
 
